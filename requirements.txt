@@ -1,0 +1,25 @@
+# Framework principal
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Base de datos
+sqlalchemy==2.0.30
+pymysql==1.1.1
+alembic==1.13.1
+
+# Autenticación y seguridad
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+# Validación y configuración
+pydantic==2.7.1
+pydantic-settings==2.2.1
+python-dotenv==1.0.1
+
+# Pagos
+stripe==9.9.0
+
+# Utilidades
+email-validator==2.1.1
+Pillow==10.3.0
