@@ -8,7 +8,7 @@ from app.config import settings
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
@@ -24,7 +24,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(user_id: int) -> str:
     """Genera un JWT con el ID del usuario."""
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": user_id, "exp": expire}
+    payload = {"sub": str(user_id), "exp": expire}  # <-- str(user_id)
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
