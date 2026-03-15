@@ -1,6 +1,6 @@
 # MarketNest Backend
 
-API REST construida con **FastAPI** y **MySQL** para gestión de establecimientos y e-commerce multi-tenant. Permite a negocios crear su propia tienda online dentro de una plataforma centralizada.
+API REST construida con **FastAPI** y **MySQL** para gestión de establecimientos y e-commerce multi-tenant. Permite a negocios crear su propia tienda online dentro de una plataforma centralizada, con soporte para productos, servicios y agendamiento de citas.
 
 ---
 
@@ -25,27 +25,28 @@ API REST construida con **FastAPI** y **MySQL** para gestión de establecimiento
 MarketNest es un SaaS (Software as a Service) multi-tenant donde:
 
 - **Tú** (superadmin) controlas la plataforma — apruebas o rechazas solicitudes de establecimientos, gestionas suscripciones y monitoreas el sistema completo.
-- **Los negocios** (admins) crean su tienda, suben productos, gestionan inventario, personalizan colores y logo, y ven estadísticas de ventas.
-- **Los compradores** (customers) navegan tiendas, agregan productos al carrito y realizan compras con Stripe.
+- **Los negocios** (admins) crean su tienda, publican productos y/o servicios, gestionan inventario, personalizan colores y logo, ven estadísticas de ventas y gestionan citas.
+- **Los compradores** (customers) navegan tiendas, agregan productos al carrito, realizan compras con Stripe y agendan citas.
 
 ---
 
 ## Stack tecnológico
 
-| Herramienta       | Versión | Propósito                               |
-| ----------------- | ------- | --------------------------------------- |
-| Python            | 3.12    | Lenguaje principal                      |
-| FastAPI           | 0.111.0 | Framework web                           |
-| Uvicorn           | 0.29.0  | Servidor ASGI                           |
-| SQLAlchemy        | 2.0.30  | ORM — mapeo de modelos a tablas         |
-| Alembic           | 1.13.1  | Migraciones de base de datos            |
-| PyMySQL           | 1.1.1   | Driver de conexión a MySQL              |
-| Pydantic          | 2.7.1   | Validación de datos de entrada y salida |
-| pydantic-settings | 2.2.1   | Lectura de variables de entorno         |
-| python-jose       | 3.3.0   | Generación y decodificación de JWT      |
-| passlib + argon2  | 1.7.4   | Hasheo seguro de contraseñas            |
-| Stripe            | 9.9.0   | Pasarela de pagos                       |
-| python-dotenv     | 1.0.1   | Carga del archivo .env                  |
+| Herramienta       | Versión | Propósito                                    |
+| ----------------- | ------- | -------------------------------------------- |
+| Python            | 3.12    | Lenguaje principal                           |
+| FastAPI           | 0.111.0 | Framework web                                |
+| Uvicorn           | 0.29.0  | Servidor ASGI                                |
+| SQLAlchemy        | 2.0.30  | ORM — mapeo de modelos a tablas              |
+| Alembic           | 1.13.1  | Migraciones de base de datos                 |
+| PyMySQL           | 1.1.1   | Driver de conexión a MySQL                   |
+| Pydantic          | 2.7.1   | Validación de datos de entrada y salida      |
+| pydantic-settings | 2.2.1   | Lectura de variables de entorno              |
+| python-jose       | 3.3.0   | Generación y decodificación de JWT           |
+| passlib + argon2  | 1.7.4   | Hasheo seguro de contraseñas                 |
+| argon2-cffi       | 23.1.0  | Backend de hasheo compatible con Python 3.12 |
+| Stripe            | 9.9.0   | Pasarela de pagos                            |
+| python-dotenv     | 1.0.1   | Carga del archivo .env                       |
 
 ---
 
@@ -90,43 +91,56 @@ marketnest/
 │   │
 │   ├── models/              # Tablas de la base de datos (SQLAlchemy)
 │   │   ├── __init__.py      # Importa todos los modelos para Alembic
-│   │   ├── user.py          # Tabla users + enum UserRole
-│   │   ├── store.py         # Tabla stores + enum StoreStatus
+│   │   ├── user.py          # Tabla users + enums UserRole, IdentityType
+│   │   ├── store.py         # Tabla stores + enums StoreStatus, StoreType, BusinessType
 │   │   ├── subscription.py  # Tabla store_subscriptions + enums de plan
 │   │   ├── product.py       # Tabla products
 │   │   ├── cart.py          # Tabla cart_items
 │   │   ├── order.py         # Tablas orders + order_items + enum OrderStatus
-│   │   └── payment.py       # Tabla payments + enum PaymentStatus
+│   │   ├── payment.py       # Tabla payments + enum PaymentStatus
+│   │   ├── service_category.py  # Tabla service_categories
+│   │   ├── service.py       # Tabla services + enum DurationUnit
+│   │   └── appointment.py   # Tabla appointments + enum AppointmentStatus
 │   │
 │   ├── schemas/             # Validación de datos con Pydantic
 │   │   ├── __init__.py
-│   │   ├── user.py          # UserCreate, UserLogin, UserResponse, TokenResponse
-│   │   ├── store.py         # StoreCreate, StoreUpdate, StoreResponse
+│   │   ├── user.py          # UserCreate, UserLogin, UserUpdate, UserResponse, TokenResponse
+│   │   ├── store.py         # StoreCreate, StoreUpdate, StoreResponse, DaySchedule
 │   │   ├── product.py       # ProductCreate, ProductUpdate, ProductResponse
 │   │   ├── cart.py          # CartItemCreate, CartItemUpdate, CartResponse
 │   │   ├── order.py         # OrderResponse, OrderStatusUpdate
-│   │   └── payment.py       # PaymentCreate, CheckoutResponse, PaymentResponse
+│   │   ├── payment.py       # PaymentCreate, CheckoutResponse, PaymentResponse
+│   │   ├── service_category.py  # ServiceCategoryCreate, ServiceCategoryUpdate, ServiceCategoryResponse
+│   │   ├── service.py       # ServiceCreate, ServiceUpdate, ServiceResponse
+│   │   └── appointment.py   # AppointmentCreate, AppointmentUpdate, AppointmentStatusUpdate, AppointmentResponse
 │   │
 │   ├── routers/             # Endpoints agrupados por dominio
 │   │   ├── __init__.py
 │   │   ├── auth.py          # /api/auth — registro, login, perfil
+│   │   ├── users.py         # /api/users — gestión de usuarios
 │   │   ├── stores.py        # /api/stores — gestión de tiendas
 │   │   ├── products.py      # /api/products — productos e inventario
 │   │   ├── cart.py          # /api/cart — carrito de compras
 │   │   ├── orders.py        # /api/orders — órdenes de compra
 │   │   ├── payments.py      # /api/payments — pagos con Stripe
 │   │   ├── dashboard.py     # /api/dashboard — estadísticas
-│   │   └── admin.py         # /api/admin — panel superadmin
+│   │   ├── admin.py         # /api/admin — panel superadmin
+│   │   ├── services.py      # /api/services — categorías y servicios
+│   │   └── appointments.py  # /api/appointments — agendamiento de citas
 │   │
 │   ├── services/            # Lógica de negocio separada de los routers
 │   │   ├── __init__.py
-│   │   ├── auth_service.py       # Hasheo, JWT, registro, autenticación
-│   │   ├── store_service.py      # CRUD de tiendas, aprobación
-│   │   ├── product_service.py    # CRUD de productos, inventario
-│   │   ├── cart_service.py       # Agregar, quitar, vaciar carrito
-│   │   ├── order_service.py      # Crear orden desde carrito, estados
-│   │   ├── payment_service.py    # Integración Stripe, webhooks
-│   │   └── dashboard_service.py  # Estadísticas de tienda y sistema
+│   │   ├── auth_service.py             # Hasheo, JWT, registro, autenticación
+│   │   ├── user_service.py             # Actualización de perfil, gestión de usuarios
+│   │   ├── store_service.py            # CRUD de tiendas, validaciones, aprobación
+│   │   ├── product_service.py          # CRUD de productos, inventario
+│   │   ├── cart_service.py             # Agregar, quitar, vaciar carrito
+│   │   ├── order_service.py            # Crear orden desde carrito, estados
+│   │   ├── payment_service.py          # Integración Stripe, webhooks
+│   │   ├── dashboard_service.py        # Estadísticas de tienda y sistema
+│   │   ├── service_category_service.py # CRUD de categorías de servicios
+│   │   ├── service_service.py          # CRUD de servicios
+│   │   └── appointment_service.py      # Agendamiento, confirmación, cancelación
 │   │
 │   └── middleware/          # Seguridad transversal
 │       ├── auth.py          # Verificación JWT, control de roles
@@ -136,6 +150,8 @@ marketnest/
 │   ├── env.py               # Configuración de Alembic — conecta con los modelos
 │   ├── script.py.mako       # Plantilla para generar archivos de migración
 │   └── versions/            # Archivos de migración generados
+│       ├── 1d6e78cac995_initial_migration.py
+│       └── ba197733d3f4_add_new_fields_and_tables.py
 │
 ├── .env                     # Variables de entorno — NO subir a Git
 ├── .env.example             # Plantilla del .env — SÍ subir a Git
@@ -148,15 +164,21 @@ marketnest/
 
 ## Base de datos
 
-### Diagrama de tablas
+### Tablas del sistema — 11 tablas
 
 ```
 users
 ├── id (PK)
 ├── name
+├── last_name
 ├── email (unique)
 ├── password_hash
 ├── role: superadmin | admin | customer
+├── identity_type: cc | ce | passport | nit
+├── identity_number
+├── city
+├── address
+├── photo_url
 ├── is_active
 ├── created_at
 └── updated_at
@@ -168,6 +190,18 @@ stores
 ├── description
 ├── owner_id (FK → users.id)
 ├── status: pending | active | suspended
+├── store_type: restaurant | liquor_store | clothing | barbershop | pharmacy | hardware_store | other
+├── custom_store_type   ← Solo cuando store_type = other
+├── business_type: products | services | products_services
+├── tax_id              ← NIT o número tributario
+├── phone
+├── contact_email
+├── city
+├── address
+├── latitude            ← Coordenada para mapa
+├── longitude           ← Coordenada para mapa
+├── opening_hours       ← JSON con horarios por día
+├── allows_appointments ← Activa el sistema de citas
 ├── logo_url
 ├── primary_color
 ├── secondary_color
@@ -194,6 +228,42 @@ products
 ├── stock
 ├── image_url
 ├── is_active
+├── created_at
+└── updated_at
+
+service_categories
+├── id (PK)
+├── store_id (FK → stores.id)
+├── name
+├── description
+├── is_active
+├── created_at
+└── updated_at
+
+services
+├── id (PK)
+├── store_id (FK → stores.id)
+├── category_id (FK → service_categories.id, opcional)
+├── name
+├── description
+├── price
+├── duration
+├── duration_unit: minutes | hours | days
+├── image_url
+├── is_active
+├── created_at
+└── updated_at
+
+appointments
+├── id (PK)
+├── store_id (FK → stores.id)
+├── user_id (FK → users.id)
+├── service_id (FK → services.id, opcional)
+├── date
+├── time
+├── status: pending | confirmed | cancelled | completed
+├── notes           ← Notas del cliente
+├── admin_notes     ← Notas internas del admin
 ├── created_at
 └── updated_at
 
@@ -238,22 +308,28 @@ payments
 - Una `Store` tiene un `Owner` (User con rol admin)
 - Una `Store` tiene una `StoreSubscription`
 - Una `Store` tiene muchos `Products`
+- Una `Store` tiene muchas `ServiceCategories`
+- Una `Store` tiene muchos `Services`
 - Una `Store` tiene muchas `Orders`
+- Una `Store` tiene muchas `Appointments`
+- Una `ServiceCategory` tiene muchos `Services`
 - Un `User` tiene muchos `CartItems`
 - Un `User` tiene muchas `Orders`
+- Un `User` tiene muchas `Appointments`
 - Una `Order` tiene muchos `OrderItems`
 - Una `Order` tiene un `Payment`
+- Un `Service` puede estar en muchas `Appointments`
 - Un `Product` puede estar en muchos `CartItems` y `OrderItems`
 
 ---
 
 ## Roles del sistema
 
-| Rol          | Descripción                 | Permisos                                                                                                |
-| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `superadmin` | Dueño del sistema           | Todo — ver y gestionar todos los establecimientos, aprobar/suspender tiendas, ver estadísticas globales |
-| `admin`      | Dueño de un establecimiento | Gestionar su tienda, productos, inventario, ver sus órdenes y estadísticas                              |
-| `customer`   | Comprador                   | Navegar tiendas, agregar al carrito, comprar                                                            |
+| Rol          | Descripción                 | Permisos                                                                                                                    |
+| ------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `superadmin` | Dueño del sistema           | Todo — ver y gestionar todos los establecimientos, aprobar/suspender tiendas, ver estadísticas globales, gestionar usuarios |
+| `admin`      | Dueño de un establecimiento | Gestionar su tienda, productos, servicios, inventario, ver sus órdenes, gestionar citas y ver estadísticas                  |
+| `customer`   | Comprador / cliente         | Navegar tiendas, agregar al carrito, comprar, agendar citas                                                                 |
 
 ---
 
@@ -355,6 +431,13 @@ La documentación Swagger está en `http://localhost:8000/docs`
 
 Las migraciones son archivos que describen los cambios en la base de datos a lo largo del tiempo. Alembic compara los modelos de SQLAlchemy contra el estado actual de la BD y genera el SQL necesario automáticamente.
 
+### Historial de migraciones del proyecto
+
+| Revisión       | Descripción               | Cambios                                                                                                       |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `1d6e78cac995` | initial migration         | Crea las tablas base: users, stores, store_subscriptions, products, cart_items, orders, order_items, payments |
+| `ba197733d3f4` | add new fields and tables | Agrega campos a users y stores, crea tablas service_categories, services, appointments                        |
+
 ### Comandos principales
 
 **Generar una migración nueva**
@@ -408,7 +491,7 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 ### Flujo de trabajo al modificar un modelo
 
 1. Modifica el archivo del modelo en `app/models/`
-2. Genera la migración: `alembic revision --autogenerate -m "agrega columna X a tabla Y"`
+2. Genera la migración: `alembic revision --autogenerate -m "descripcion del cambio"`
 3. Revisa el archivo generado en `alembic/versions/`
 4. Aplica la migración: `alembic upgrade head`
 
@@ -418,76 +501,113 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 
 ### Autenticación — `/api/auth`
 
-| Método | Endpoint             | Descripción                           | Auth requerida |
-| ------ | -------------------- | ------------------------------------- | -------------- |
-| POST   | `/api/auth/register` | Registra un nuevo usuario             | No             |
-| POST   | `/api/auth/login`    | Inicia sesión con JSON                | No             |
-| POST   | `/api/auth/token`    | Inicia sesión con form-data (Swagger) | No             |
-| GET    | `/api/auth/me`       | Perfil del usuario autenticado        | Sí             |
+| Método | Endpoint             | Descripción                           | Auth |
+| ------ | -------------------- | ------------------------------------- | ---- |
+| POST   | `/api/auth/register` | Registra un nuevo usuario             | No   |
+| POST   | `/api/auth/login`    | Inicia sesión con JSON                | No   |
+| POST   | `/api/auth/token`    | Inicia sesión con form-data (Swagger) | No   |
+| GET    | `/api/auth/me`       | Perfil del usuario autenticado        | Sí   |
+
+### Usuarios — `/api/users`
+
+| Método | Endpoint               | Descripción                             | Auth       |
+| ------ | ---------------------- | --------------------------------------- | ---------- |
+| GET    | `/api/users/me`        | Perfil completo del usuario             | Sí         |
+| PUT    | `/api/users/me`        | Actualiza perfil e información personal | Sí         |
+| GET    | `/api/users/`          | Lista todos los usuarios                | Superadmin |
+| GET    | `/api/users/{user_id}` | Obtiene un usuario por ID               | Superadmin |
+| DELETE | `/api/users/{user_id}` | Desactiva un usuario                    | Superadmin |
 
 ### Tiendas — `/api/stores`
 
-| Método | Endpoint                 | Descripción                        | Auth requerida |
-| ------ | ------------------------ | ---------------------------------- | -------------- |
-| POST   | `/api/stores/`           | Solicita crear una tienda          | Sí             |
-| GET    | `/api/stores/`           | Lista mis tiendas                  | Sí             |
-| GET    | `/api/stores/{slug}`     | Obtiene una tienda por slug        | No             |
-| PUT    | `/api/stores/{store_id}` | Actualiza tienda y personalización | Admin          |
+| Método | Endpoint                 | Descripción                        | Auth  |
+| ------ | ------------------------ | ---------------------------------- | ----- |
+| POST   | `/api/stores/`           | Solicita crear una tienda          | Sí    |
+| GET    | `/api/stores/`           | Lista mis tiendas                  | Sí    |
+| GET    | `/api/stores/{slug}`     | Obtiene una tienda por slug        | No    |
+| PUT    | `/api/stores/{store_id}` | Actualiza tienda y personalización | Admin |
 
 ### Productos — `/api/products`
 
-| Método | Endpoint                             | Descripción                | Auth requerida |
-| ------ | ------------------------------------ | -------------------------- | -------------- |
-| GET    | `/api/products/store/{store_id}`     | Lista productos activos    | No             |
-| GET    | `/api/products/store/{store_id}/all` | Lista todos los productos  | Admin          |
-| GET    | `/api/products/{product_id}`         | Obtiene un producto        | No             |
-| POST   | `/api/products/store/{store_id}`     | Crea un producto           | Admin          |
-| PUT    | `/api/products/{product_id}`         | Actualiza producto / stock | Admin          |
-| DELETE | `/api/products/{product_id}`         | Desactiva un producto      | Admin          |
+| Método | Endpoint                             | Descripción                | Auth  |
+| ------ | ------------------------------------ | -------------------------- | ----- |
+| GET    | `/api/products/store/{store_id}`     | Lista productos activos    | No    |
+| GET    | `/api/products/store/{store_id}/all` | Lista todos los productos  | Admin |
+| GET    | `/api/products/{product_id}`         | Obtiene un producto        | No    |
+| POST   | `/api/products/store/{store_id}`     | Crea un producto           | Admin |
+| PUT    | `/api/products/{product_id}`         | Actualiza producto / stock | Admin |
+| DELETE | `/api/products/{product_id}`         | Desactiva un producto      | Admin |
 
 ### Carrito — `/api/cart`
 
-| Método | Endpoint              | Descripción                 | Auth requerida |
-| ------ | --------------------- | --------------------------- | -------------- |
-| GET    | `/api/cart/`          | Ver carrito con total       | Sí             |
-| POST   | `/api/cart/`          | Agregar producto al carrito | Sí             |
-| PUT    | `/api/cart/{item_id}` | Actualizar cantidad         | Sí             |
-| DELETE | `/api/cart/{item_id}` | Eliminar ítem del carrito   | Sí             |
-| DELETE | `/api/cart/`          | Vaciar todo el carrito      | Sí             |
+| Método | Endpoint              | Descripción                 | Auth |
+| ------ | --------------------- | --------------------------- | ---- |
+| GET    | `/api/cart/`          | Ver carrito con total       | Sí   |
+| POST   | `/api/cart/`          | Agregar producto al carrito | Sí   |
+| PUT    | `/api/cart/{item_id}` | Actualizar cantidad         | Sí   |
+| DELETE | `/api/cart/{item_id}` | Eliminar ítem del carrito   | Sí   |
+| DELETE | `/api/cart/`          | Vaciar todo el carrito      | Sí   |
 
 ### Órdenes — `/api/orders`
 
-| Método | Endpoint                        | Descripción                  | Auth requerida |
-| ------ | ------------------------------- | ---------------------------- | -------------- |
-| POST   | `/api/orders/`                  | Crear orden desde el carrito | Sí             |
-| GET    | `/api/orders/my`                | Historial de mis órdenes     | Sí             |
-| GET    | `/api/orders/{order_id}`        | Ver una orden específica     | Sí             |
-| GET    | `/api/orders/store/{store_id}`  | Órdenes de la tienda         | Admin          |
-| PATCH  | `/api/orders/{order_id}/status` | Actualizar estado de orden   | Admin          |
+| Método | Endpoint                        | Descripción                  | Auth  |
+| ------ | ------------------------------- | ---------------------------- | ----- |
+| POST   | `/api/orders/`                  | Crear orden desde el carrito | Sí    |
+| GET    | `/api/orders/my`                | Historial de mis órdenes     | Sí    |
+| GET    | `/api/orders/{order_id}`        | Ver una orden específica     | Sí    |
+| GET    | `/api/orders/store/{store_id}`  | Órdenes de la tienda         | Admin |
+| PATCH  | `/api/orders/{order_id}/status` | Actualizar estado de orden   | Admin |
 
 ### Pagos — `/api/payments`
 
-| Método | Endpoint                         | Descripción               | Auth requerida    |
+| Método | Endpoint                         | Descripción               | Auth              |
 | ------ | -------------------------------- | ------------------------- | ----------------- |
 | POST   | `/api/payments/checkout`         | Inicia el pago con Stripe | Sí                |
 | GET    | `/api/payments/order/{order_id}` | Ver pago de una orden     | Sí                |
 | POST   | `/api/payments/webhook`          | Webhook de Stripe         | No (firma Stripe) |
 
+### Servicios — `/api/services`
+
+| Método | Endpoint                                    | Descripción                   | Auth  |
+| ------ | ------------------------------------------- | ----------------------------- | ----- |
+| GET    | `/api/services/store/{store_id}/categories` | Lista categorías de la tienda | No    |
+| POST   | `/api/services/store/{store_id}/categories` | Crea una categoría            | Admin |
+| PUT    | `/api/services/categories/{category_id}`    | Actualiza una categoría       | Admin |
+| DELETE | `/api/services/categories/{category_id}`    | Desactiva una categoría       | Admin |
+| GET    | `/api/services/store/{store_id}`            | Lista servicios de la tienda  | No    |
+| GET    | `/api/services/category/{category_id}`      | Lista servicios por categoría | No    |
+| GET    | `/api/services/{service_id}`                | Obtiene un servicio           | No    |
+| POST   | `/api/services/store/{store_id}`            | Crea un servicio              | Admin |
+| PUT    | `/api/services/{service_id}`                | Actualiza un servicio         | Admin |
+| DELETE | `/api/services/{service_id}`                | Desactiva un servicio         | Admin |
+
+### Citas — `/api/appointments`
+
+| Método | Endpoint                                    | Descripción                                    | Auth  |
+| ------ | ------------------------------------------- | ---------------------------------------------- | ----- |
+| POST   | `/api/appointments/`                        | Agenda una cita                                | Sí    |
+| GET    | `/api/appointments/my`                      | Mis citas agendadas                            | Sí    |
+| GET    | `/api/appointments/store/{store_id}`        | Citas de la tienda (filtro por fecha opcional) | Admin |
+| GET    | `/api/appointments/{appointment_id}`        | Ver una cita                                   | Sí    |
+| PUT    | `/api/appointments/{appointment_id}`        | Modifica fecha/hora/notas                      | Sí    |
+| PATCH  | `/api/appointments/{appointment_id}/status` | Confirma, cancela o completa                   | Admin |
+| DELETE | `/api/appointments/{appointment_id}`        | Cancela una cita                               | Sí    |
+
 ### Dashboard — `/api/dashboard`
 
-| Método | Endpoint                          | Descripción               | Auth requerida |
-| ------ | --------------------------------- | ------------------------- | -------------- |
-| GET    | `/api/dashboard/store/{store_id}` | Estadísticas de la tienda | Admin          |
-| GET    | `/api/dashboard/superadmin`       | Estadísticas globales     | Superadmin     |
+| Método | Endpoint                          | Descripción               | Auth       |
+| ------ | --------------------------------- | ------------------------- | ---------- |
+| GET    | `/api/dashboard/store/{store_id}` | Estadísticas de la tienda | Admin      |
+| GET    | `/api/dashboard/superadmin`       | Estadísticas globales     | Superadmin |
 
 ### Panel Superadmin — `/api/admin`
 
-| Método | Endpoint                              | Descripción                      | Auth requerida |
-| ------ | ------------------------------------- | -------------------------------- | -------------- |
-| GET    | `/api/admin/stores`                   | Lista todos los establecimientos | Superadmin     |
-| GET    | `/api/admin/stores/pending`           | Lista tiendas pendientes         | Superadmin     |
-| PATCH  | `/api/admin/stores/{store_id}/status` | Aprueba o suspende tienda        | Superadmin     |
-| GET    | `/api/admin/dashboard`                | Dashboard global                 | Superadmin     |
+| Método | Endpoint                              | Descripción                      | Auth       |
+| ------ | ------------------------------------- | -------------------------------- | ---------- |
+| GET    | `/api/admin/stores`                   | Lista todos los establecimientos | Superadmin |
+| GET    | `/api/admin/stores/pending`           | Lista tiendas pendientes         | Superadmin |
+| PATCH  | `/api/admin/stores/{store_id}/status` | Aprueba o suspende tienda        | Superadmin |
+| GET    | `/api/admin/dashboard`                | Dashboard global                 | Superadmin |
 
 ---
 
@@ -505,7 +625,7 @@ El sistema usa **JWT (JSON Web Tokens)** con el algoritmo HS256.
    Authorization: Bearer <token>
    ```
 5. El servidor verifica la firma del token y extrae el `user_id`
-6. Si el token es válido, ejecuta el endpoint
+6. Si el token es válido ejecuta el endpoint
 
 ### Estructura del JWT
 
@@ -519,6 +639,10 @@ El sistema usa **JWT (JSON Web Tokens)** con el algoritmo HS256.
 ### Expiración
 
 Los tokens expiran según `ACCESS_TOKEN_EXPIRE_MINUTES` del `.env` (por defecto 30 minutos). Cuando expira el usuario debe hacer login de nuevo.
+
+### Nota sobre contraseñas
+
+Se usa **Argon2** en lugar de bcrypt por compatibilidad con Python 3.12. Argon2 es actualmente el algoritmo de hasheo más seguro y recomendado.
 
 ---
 
@@ -546,7 +670,7 @@ uvicorn app.main:app --reload --port 8001
 
 ```bash
 pip install nombre-paquete
-pip freeze > requirements.txt  # Actualizar requirements.txt
+pip freeze > requirements.txt
 ```
 
 **Generar migración**
