@@ -1,16 +1,21 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
-from app.models.user import UserRole
+from app.models.user import UserRole, IdentityType
 
 
-# --- Esquemas de entrada (lo que recibe la API) ---
+# --- Esquemas de entrada ---
 
 class UserCreate(BaseModel):
     name: str
+    last_name: Optional[str] = None
     email: EmailStr
     password: str
     role: UserRole = UserRole.customer
+    identity_type: Optional[IdentityType] = None
+    identity_number: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -20,16 +25,28 @@ class UserLogin(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[EmailStr] = None
+    identity_type: Optional[IdentityType] = None
+    identity_number: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
-# --- Esquemas de salida (lo que devuelve la API) ---
+# --- Esquemas de salida ---
 
 class UserResponse(BaseModel):
     id: int
     name: str
+    last_name: Optional[str]
     email: str
     role: UserRole
+    identity_type: Optional[IdentityType]
+    identity_number: Optional[str]
+    city: Optional[str]
+    address: Optional[str]
+    photo_url: Optional[str]
     is_active: bool
     created_at: datetime
 
