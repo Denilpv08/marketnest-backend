@@ -30,6 +30,12 @@ def list_my_stores(
     stores = store_service.get_all_stores(db)
     return [s for s in stores if s.owner_id == current_user.id]
 
+@router.get("/public", response_model=List[StoreResponse])
+def list_public_stores(db: Session = Depends(get_db)):
+    """Lista todas las tiendas activas (público)."""
+    from app.models.store import StoreStatus
+    stores = store_service.get_all_stores(db, status=StoreStatus.active)
+    return stores
 
 @router.get("/{slug}", response_model=StoreResponse)
 def get_store(slug: str, db: Session = Depends(get_db)):
