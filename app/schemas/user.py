@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
-from app.models.user import UserRole, IdentityType
+from app.models.user import UserRole, IdentityType, UserStatus
 
 
 # --- Esquemas de entrada ---
@@ -34,6 +34,10 @@ class UserUpdate(BaseModel):
     photo_url: Optional[str] = None
 
 
+class UserStatusUpdate(BaseModel):
+    status: UserStatus
+
+
 # --- Esquemas de salida ---
 
 class UserResponse(BaseModel):
@@ -42,6 +46,7 @@ class UserResponse(BaseModel):
     last_name: Optional[str]
     email: str
     role: UserRole
+    status: UserStatus
     identity_type: Optional[IdentityType]
     identity_number: Optional[str]
     city: Optional[str]
