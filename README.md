@@ -11,7 +11,7 @@ API REST construida con **FastAPI** y **MySQL** para gestión de establecimiento
 - [Arquitectura](#arquitectura)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Base de datos](#base-de-datos)
-- [Roles del sistema](#roles-del-sistema)
+- [Roles y estados del sistema](#roles-y-estados-del-sistema)
 - [Instalación y configuración](#instalación-y-configuración)
 - [Migraciones](#migraciones)
 - [Endpoints](#endpoints)
@@ -24,8 +24,8 @@ API REST construida con **FastAPI** y **MySQL** para gestión de establecimiento
 
 MarketNest es un SaaS (Software as a Service) multi-tenant donde:
 
-- **Tú** (superadmin) controlas la plataforma — apruebas o rechazas solicitudes de establecimientos, gestionas suscripciones y monitoreas el sistema completo.
-- **Los negocios** (admins) crean su tienda, publican productos y/o servicios, gestionan inventario, personalizan colores y logo, ven estadísticas de ventas y gestionan citas.
+- **Tú** (superadmin) controlas la plataforma — apruebas o rechazas solicitudes de establecimientos y usuarios admin, gestionas suscripciones y monitoreas el sistema completo.
+- **Los negocios** (admins) solicitan su cuenta, esperan aprobación, crean su tienda, publican productos y/o servicios, gestionan inventario, personalizan colores y logo, ven estadísticas de ventas y gestionan citas.
 - **Los compradores** (customers) navegan tiendas, agregan productos al carrito, realizan compras con Stripe y agendan citas.
 
 ---
@@ -91,7 +91,7 @@ marketnest/
 │   │
 │   ├── models/              # Tablas de la base de datos (SQLAlchemy)
 │   │   ├── __init__.py      # Importa todos los modelos para Alembic
-│   │   ├── user.py          # Tabla users + enums UserRole, IdentityType
+│   │   ├── user.py          # Tabla users + enums UserRole, UserStatus, IdentityType
 │   │   ├── store.py         # Tabla stores + enums StoreStatus, StoreType, BusinessType
 │   │   ├── subscription.py  # Tabla store_subscriptions + enums de plan
 │   │   ├── product.py       # Tabla products
@@ -104,7 +104,7 @@ marketnest/
 │   │
 │   ├── schemas/             # Validación de datos con Pydantic
 │   │   ├── __init__.py
-│   │   ├── user.py          # UserCreate, UserLogin, UserUpdate, UserResponse, TokenResponse
+│   │   ├── user.py          # UserCreate, UserLogin, UserUpdate, UserStatusUpdate, UserResponse, TokenResponse
 │   │   ├── store.py         # StoreCreate, StoreUpdate, StoreResponse, DaySchedule
 │   │   ├── product.py       # ProductCreate, ProductUpdate, ProductResponse
 │   │   ├── cart.py          # CartItemCreate, CartItemUpdate, CartResponse
@@ -117,21 +117,21 @@ marketnest/
 │   ├── routers/             # Endpoints agrupados por dominio
 │   │   ├── __init__.py
 │   │   ├── auth.py          # /api/auth — registro, login, perfil
-│   │   ├── users.py         # /api/users — gestión de usuarios
+│   │   ├── users.py         # /api/users — perfil del usuario autenticado
 │   │   ├── stores.py        # /api/stores — gestión de tiendas
 │   │   ├── products.py      # /api/products — productos e inventario
 │   │   ├── cart.py          # /api/cart — carrito de compras
 │   │   ├── orders.py        # /api/orders — órdenes de compra
 │   │   ├── payments.py      # /api/payments — pagos con Stripe
 │   │   ├── dashboard.py     # /api/dashboard — estadísticas
-│   │   ├── admin.py         # /api/admin — panel superadmin
+│   │   ├── admin.py         # /api/admin — panel superadmin (tiendas + usuarios)
 │   │   ├── services.py      # /api/services — categorías y servicios
 │   │   └── appointments.py  # /api/appointments — agendamiento de citas
 │   │
 │   ├── services/            # Lógica de negocio separada de los routers
 │   │   ├── __init__.py
 │   │   ├── auth_service.py             # Hasheo, JWT, registro, autenticación
-│   │   ├── user_service.py             # Actualización de perfil, gestión de usuarios
+│   │   ├── user_service.py             # Actualización de perfil, gestión de usuarios, estados
 │   │   ├── store_service.py            # CRUD de tiendas, validaciones, aprobación
 │   │   ├── product_service.py          # CRUD de productos, inventario
 │   │   ├── cart_service.py             # Agregar, quitar, vaciar carrito
@@ -151,7 +151,8 @@ marketnest/
 │   ├── script.py.mako       # Plantilla para generar archivos de migración
 │   └── versions/            # Archivos de migración generados
 │       ├── 1d6e78cac995_initial_migration.py
-│       └── ba197733d3f4_add_new_fields_and_tables.py
+│       ├── ba197733d3f4_add_new_fields_and_tables.py
+│       └── 8c9cf96e4b6d_add_user_status.py
 │
 ├── .env                     # Variables de entorno — NO subir a Git
 ├── .env.example             # Plantilla del .env — SÍ subir a Git
@@ -174,6 +175,7 @@ users
 ├── email (unique)
 ├── password_hash
 ├── role: superadmin | admin | customer
+├── status: active | pending | suspended
 ├── identity_type: cc | ce | passport | nit
 ├── identity_number
 ├── city
@@ -302,34 +304,45 @@ payments
 └── updated_at
 ```
 
-### Relaciones entre tablas
-
-- Un `User` puede tener una `Store` (si es admin)
-- Una `Store` tiene un `Owner` (User con rol admin)
-- Una `Store` tiene una `StoreSubscription`
-- Una `Store` tiene muchos `Products`
-- Una `Store` tiene muchas `ServiceCategories`
-- Una `Store` tiene muchos `Services`
-- Una `Store` tiene muchas `Orders`
-- Una `Store` tiene muchas `Appointments`
-- Una `ServiceCategory` tiene muchos `Services`
-- Un `User` tiene muchos `CartItems`
-- Un `User` tiene muchas `Orders`
-- Un `User` tiene muchas `Appointments`
-- Una `Order` tiene muchos `OrderItems`
-- Una `Order` tiene un `Payment`
-- Un `Service` puede estar en muchas `Appointments`
-- Un `Product` puede estar en muchos `CartItems` y `OrderItems`
-
 ---
 
-## Roles del sistema
+## Roles y estados del sistema
 
-| Rol          | Descripción                 | Permisos                                                                                                                    |
-| ------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `superadmin` | Dueño del sistema           | Todo — ver y gestionar todos los establecimientos, aprobar/suspender tiendas, ver estadísticas globales, gestionar usuarios |
-| `admin`      | Dueño de un establecimiento | Gestionar su tienda, productos, servicios, inventario, ver sus órdenes, gestionar citas y ver estadísticas                  |
-| `customer`   | Comprador / cliente         | Navegar tiendas, agregar al carrito, comprar, agendar citas                                                                 |
+### Roles
+
+| Rol          | Descripción                 | Permisos                                                                 |
+| ------------ | --------------------------- | ------------------------------------------------------------------------ |
+| `superadmin` | Dueño del sistema           | Todo — gestionar usuarios, tiendas, ver estadísticas globales            |
+| `admin`      | Dueño de un establecimiento | Gestionar su tienda, productos, servicios, órdenes, citas y estadísticas |
+| `customer`   | Comprador / cliente         | Navegar tiendas, agregar al carrito, comprar, agendar citas              |
+
+### Estados de usuario (`UserStatus`)
+
+| Estado      | Descripción                               | Puede iniciar sesión |
+| ----------- | ----------------------------------------- | -------------------- |
+| `active`    | Usuario activo y aprobado                 | ✅ Sí                |
+| `pending`   | Admin esperando aprobación del superadmin | ❌ No                |
+| `suspended` | Suspendido por el superadmin              | ❌ No                |
+
+### Flujo de registro de un admin
+
+```
+Admin se registra → status: pending → No puede iniciar sesión
+       ↓
+Superadmin aprueba → status: active → Puede iniciar sesión y crear tienda
+       ↓
+Admin crea tienda → store.status: pending → Tienda no visible
+       ↓
+Superadmin aprueba tienda → store.status: active → Tienda visible
+```
+
+### Estados de tienda (`StoreStatus`)
+
+| Estado      | Descripción                           |
+| ----------- | ------------------------------------- |
+| `pending`   | Esperando aprobación del superadmin   |
+| `active`    | Tienda activa y visible para clientes |
+| `suspended` | Suspendida por el superadmin          |
 
 ---
 
@@ -429,14 +442,13 @@ La documentación Swagger está en `http://localhost:8000/docs`
 
 ## Migraciones
 
-Las migraciones son archivos que describen los cambios en la base de datos a lo largo del tiempo. Alembic compara los modelos de SQLAlchemy contra el estado actual de la BD y genera el SQL necesario automáticamente.
-
 ### Historial de migraciones del proyecto
 
 | Revisión       | Descripción               | Cambios                                                                                                       |
 | -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `1d6e78cac995` | initial migration         | Crea las tablas base: users, stores, store_subscriptions, products, cart_items, orders, order_items, payments |
 | `ba197733d3f4` | add new fields and tables | Agrega campos a users y stores, crea tablas service_categories, services, appointments                        |
+| `8c9cf96e4b6d` | add user status           | Agrega campo status a la tabla users con enum active/pending/suspended                                        |
 
 ### Comandos principales
 
@@ -446,15 +458,11 @@ Las migraciones son archivos que describen los cambios en la base de datos a lo 
 alembic revision --autogenerate -m "descripcion del cambio"
 ```
 
-Úsalo cada vez que modifiques un modelo — agregues una columna, cambies un tipo de dato, etc.
-
 **Aplicar migraciones pendientes**
 
 ```bash
 alembic upgrade head
 ```
-
-Aplica todas las migraciones que aún no se han ejecutado. `head` significa "hasta la más reciente".
 
 **Revertir la última migración**
 
@@ -462,15 +470,11 @@ Aplica todas las migraciones que aún no se han ejecutado. `head` significa "has
 alembic downgrade -1
 ```
 
-Deshace el último cambio aplicado. Útil cuando algo salió mal.
-
 **Ver el historial de migraciones**
 
 ```bash
 alembic history
 ```
-
-Muestra todas las migraciones en orden cronológico.
 
 **Ver la migración actual**
 
@@ -478,15 +482,11 @@ Muestra todas las migraciones en orden cronológico.
 alembic current
 ```
 
-Muestra en qué versión está la base de datos actualmente.
-
 **Revertir todas las migraciones**
 
 ```bash
 alembic downgrade base
 ```
-
-Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 
 ### Flujo de trabajo al modificar un modelo
 
@@ -510,13 +510,10 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 
 ### Usuarios — `/api/users`
 
-| Método | Endpoint               | Descripción                             | Auth       |
-| ------ | ---------------------- | --------------------------------------- | ---------- |
-| GET    | `/api/users/me`        | Perfil completo del usuario             | Sí         |
-| PUT    | `/api/users/me`        | Actualiza perfil e información personal | Sí         |
-| GET    | `/api/users/`          | Lista todos los usuarios                | Superadmin |
-| GET    | `/api/users/{user_id}` | Obtiene un usuario por ID               | Superadmin |
-| DELETE | `/api/users/{user_id}` | Desactiva un usuario                    | Superadmin |
+| Método | Endpoint        | Descripción                             | Auth |
+| ------ | --------------- | --------------------------------------- | ---- |
+| GET    | `/api/users/me` | Perfil completo del usuario             | Sí   |
+| PUT    | `/api/users/me` | Actualiza perfil e información personal | Sí   |
 
 ### Tiendas — `/api/stores`
 
@@ -524,6 +521,7 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 | ------ | ------------------------ | ---------------------------------- | ----- |
 | POST   | `/api/stores/`           | Solicita crear una tienda          | Sí    |
 | GET    | `/api/stores/`           | Lista mis tiendas                  | Sí    |
+| GET    | `/api/stores/public`     | Lista tiendas activas (público)    | No    |
 | GET    | `/api/stores/{slug}`     | Obtiene una tienda por slug        | No    |
 | PUT    | `/api/stores/{store_id}` | Actualiza tienda y personalización | Admin |
 
@@ -583,15 +581,15 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 
 ### Citas — `/api/appointments`
 
-| Método | Endpoint                                    | Descripción                                    | Auth  |
-| ------ | ------------------------------------------- | ---------------------------------------------- | ----- |
-| POST   | `/api/appointments/`                        | Agenda una cita                                | Sí    |
-| GET    | `/api/appointments/my`                      | Mis citas agendadas                            | Sí    |
-| GET    | `/api/appointments/store/{store_id}`        | Citas de la tienda (filtro por fecha opcional) | Admin |
-| GET    | `/api/appointments/{appointment_id}`        | Ver una cita                                   | Sí    |
-| PUT    | `/api/appointments/{appointment_id}`        | Modifica fecha/hora/notas                      | Sí    |
-| PATCH  | `/api/appointments/{appointment_id}/status` | Confirma, cancela o completa                   | Admin |
-| DELETE | `/api/appointments/{appointment_id}`        | Cancela una cita                               | Sí    |
+| Método | Endpoint                                    | Descripción                  | Auth  |
+| ------ | ------------------------------------------- | ---------------------------- | ----- |
+| POST   | `/api/appointments/`                        | Agenda una cita              | Sí    |
+| GET    | `/api/appointments/my`                      | Mis citas agendadas          | Sí    |
+| GET    | `/api/appointments/store/{store_id}`        | Citas de la tienda           | Admin |
+| GET    | `/api/appointments/{appointment_id}`        | Ver una cita                 | Sí    |
+| PUT    | `/api/appointments/{appointment_id}`        | Modifica fecha/hora/notas    | Sí    |
+| PATCH  | `/api/appointments/{appointment_id}/status` | Confirma, cancela o completa | Admin |
+| DELETE | `/api/appointments/{appointment_id}`        | Cancela una cita             | Sí    |
 
 ### Dashboard — `/api/dashboard`
 
@@ -602,12 +600,18 @@ Elimina todas las tablas creadas por Alembic. Úsalo con cuidado.
 
 ### Panel Superadmin — `/api/admin`
 
-| Método | Endpoint                              | Descripción                      | Auth       |
-| ------ | ------------------------------------- | -------------------------------- | ---------- |
-| GET    | `/api/admin/stores`                   | Lista todos los establecimientos | Superadmin |
-| GET    | `/api/admin/stores/pending`           | Lista tiendas pendientes         | Superadmin |
-| PATCH  | `/api/admin/stores/{store_id}/status` | Aprueba o suspende tienda        | Superadmin |
-| GET    | `/api/admin/dashboard`                | Dashboard global                 | Superadmin |
+| Método | Endpoint                              | Descripción                                      | Auth       |
+| ------ | ------------------------------------- | ------------------------------------------------ | ---------- |
+| GET    | `/api/admin/stores`                   | Lista todos los establecimientos                 | Superadmin |
+| GET    | `/api/admin/stores/pending`           | Lista tiendas pendientes                         | Superadmin |
+| PATCH  | `/api/admin/stores/{store_id}/status` | Aprueba o suspende tienda                        | Superadmin |
+| GET    | `/api/admin/dashboard`                | Dashboard global                                 | Superadmin |
+| GET    | `/api/admin/users`                    | Lista todos los usuarios (filtros: role, status) | Superadmin |
+| GET    | `/api/admin/users/pending`            | Lista admins pendientes                          | Superadmin |
+| GET    | `/api/admin/users/{user_id}`          | Obtiene un usuario por ID                        | Superadmin |
+| POST   | `/api/admin/users`                    | Crea un usuario admin aprobado                   | Superadmin |
+| PUT    | `/api/admin/users/{user_id}`          | Edita datos de un usuario                        | Superadmin |
+| PATCH  | `/api/admin/users/{user_id}/status`   | Aprueba, suspende o activa usuario               | Superadmin |
 
 ---
 
@@ -627,6 +631,15 @@ El sistema usa **JWT (JSON Web Tokens)** con el algoritmo HS256.
 5. El servidor verifica la firma del token y extrae el `user_id`
 6. Si el token es válido ejecuta el endpoint
 
+### Validaciones en el login
+
+El sistema verifica en orden:
+
+1. Email y contraseña correctos
+2. `is_active = True` — cuenta no eliminada
+3. `status != suspended` — cuenta no suspendida
+4. `status != pending` — cuenta aprobada por el superadmin
+
 ### Estructura del JWT
 
 ```json
@@ -636,13 +649,9 @@ El sistema usa **JWT (JSON Web Tokens)** con el algoritmo HS256.
 }
 ```
 
-### Expiración
-
-Los tokens expiran según `ACCESS_TOKEN_EXPIRE_MINUTES` del `.env` (por defecto 30 minutos). Cuando expira el usuario debe hacer login de nuevo.
-
 ### Nota sobre contraseñas
 
-Se usa **Argon2** en lugar de bcrypt por compatibilidad con Python 3.12. Argon2 es actualmente el algoritmo de hasheo más seguro y recomendado.
+Se usa **Argon2** en lugar de bcrypt por compatibilidad con Python 3.12.
 
 ---
 
@@ -658,12 +667,6 @@ venv\Scripts\activate
 
 ```bash
 uvicorn app.main:app --reload
-```
-
-**Levantar servidor en un puerto específico**
-
-```bash
-uvicorn app.main:app --reload --port 8001
 ```
 
 **Instalar una dependencia nueva**

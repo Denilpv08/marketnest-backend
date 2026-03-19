@@ -12,11 +12,17 @@ class UserRole(str, enum.Enum):
     customer = "customer"
 
 
+class UserStatus(str, enum.Enum):
+    active = "active"
+    pending = "pending"       # Admin esperando aprobación
+    suspended = "suspended"   # Suspendido por superadmin
+
+
 class IdentityType(str, enum.Enum):
-    cc = "cc"                   # Cédula de ciudadanía
-    ce = "ce"                   # Cédula de extranjería
-    passport = "passport"       # Pasaporte
-    nit = "nit"                 # NIT
+    cc = "cc"
+    ce = "ce"
+    passport = "passport"
+    nit = "nit"
 
 
 class User(Base):
@@ -28,6 +34,7 @@ class User(Base):
     email = Column(String(150), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), default=UserRole.customer, nullable=False)
+    status = Column(Enum(UserStatus), default=UserStatus.active, nullable=False)
 
     # Identidad
     identity_type = Column(Enum(IdentityType), nullable=True)
